@@ -10,10 +10,10 @@ buildGoModule rec {
   version = "0.11.2";
 
   src = fetchFromGitHub {
-    owner = "scross01";
+    owner = "Wulfsta";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "sha256-ow7bzgaY4pYccslITlkNBKfZBJv9uwPk25I1Y3bnjbU=";
+    rev = "e6c830d4f40edf8443d4cc9bc648f58e6759849c";
+    sha256 = "sha256-DOwfvyg2KAqGLxrNT2oS/juj6Tbtacma/WN3jNAyl3E=";
   };
 
   vendorHash = "sha256-0nbLHZ2WMLMK0zKZuUYz355K01Xspn9svmlFCtQjed0=";
