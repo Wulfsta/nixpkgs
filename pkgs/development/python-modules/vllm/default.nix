@@ -34,6 +34,7 @@
   cbor2,
   compressed-tensors,
   depyf,
+  datasets,
   einops,
   fastapi,
   gguf,
@@ -58,6 +59,7 @@
   outlines,
   pandas,
   partial-json-parser,
+  peft,
   prometheus-fastapi-instrumentator,
   py-cpuinfo,
   pyarrow,
@@ -74,6 +76,7 @@
   torch,
   torchaudio,
   torchvision,
+  timm,
   transformers,
   uvicorn,
   xformers,
@@ -311,6 +314,24 @@ let
     libcublas
   ];
 
+  # Torch's C++ headers include `thrust/complex.h` when built with ROCm, but
+  # rocThrust isn't reliably pulled into the compile include path.
+  rocmThrustIncludeTree =
+    if rocmSupport then
+      symlinkJoin {
+        name = "vllm-rocm-thrust-includes";
+        paths = with rocmPackages; [
+          rocthrust
+          rocprim
+          hipcub
+        ];
+      }
+    else
+      null;
+
+  # `setup.py` consumes `cmakeFlags` via Python's `str.split()`, so we must avoid spaces here.
+  rocmExtraIncludeFlags = lib.optionalString rocmSupport "-I${rocmThrustIncludeTree}/include";
+
   # Some packages are not available on all platforms
   nccl = shouldUsePkg (cudaPackages.nccl or null);
 
@@ -338,6 +359,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     ./0002-setup.py-nix-support-respect-cmakeFlags.patch
     ./0003-propagate-pythonpath.patch
     ./0005-drop-intel-reqs.patch
+    ./0006-drop-rocm-extra-reqs.patch
   ];
 
   postPatch = ''
@@ -413,6 +435,16 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
         rocprim
         hipsparse
         hipblas
+        rocrand
+        hiprand
+        rocblas
+        miopen-hip
+        hipfft
+        hipcub
+        hipsolver
+        rocsolver
+        hipblaslt
+        rocm-runtime
       ]
     )
     ++ lib.optionals stdenv.cc.isClang [
@@ -485,6 +517,13 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     cupy
     flashinfer
     nvidia-ml-py
+  ]
+  ++ lib.optionals rocmSupport [
+    rocmPackages.amdsmi
+    rocmPackages.rocminfo
+    datasets
+    peft
+    timm
   ];
 
   optional-dependencies = {
@@ -513,6 +552,10 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     (lib.cmakeFeature "CAFFE2_USE_CUDNN" "ON")
     (lib.cmakeFeature "CAFFE2_USE_CUFILE" "ON")
     (lib.cmakeFeature "CUTLASS_ENABLE_CUBLAS" "ON")
+  ]
+  ++ lib.optionals rocmSupport [
+    (lib.cmakeFeature "CMAKE_CXX_FLAGS" rocmExtraIncludeFlags)
+    (lib.cmakeFeature "CMAKE_HIP_FLAGS" rocmExtraIncludeFlags)
   ];
 
   env =
@@ -525,7 +568,10 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
       VLLM_TARGET_DEVICE = "rocm";
       # Otherwise it tries to enumerate host supported ROCM gfx archs, and that is not possible due to sandboxing.
       PYTORCH_ROCM_ARCH = lib.strings.concatStringsSep ";" rocmPackages.clr.gpuTargets;
+      # vLLM's CMake logic checks `ROCM_PATH` to decide whether HIP/ROCm is available.
+      ROCM_PATH = "${rocmPackages.clr}";
       ROCM_HOME = "${rocmPackages.clr}";
+      TRITON_KERNELS_SRC_DIR = "${lib.getDev triton-kernels}/python/triton_kernels/triton_kernels";
     }
     // lib.optionalAttrs cpuSupport {
       VLLM_TARGET_DEVICE = "cpu";
@@ -539,6 +585,22 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   '';
 
   pythonRelaxDeps = true;
+
+  makeWrapperArgs = lib.optionals rocmSupport [
+    "--prefix"
+    "PYTHONPATH"
+    ":"
+    "${rocmPackages.amdsmi}/share/amd_smi"
+    "--prefix"
+    "LD_LIBRARY_PATH"
+    ":"
+    (lib.makeLibraryPath (
+      map lib.getLib [
+        rocmPackages.clr
+        rocmPackages.rocm-runtime
+      ]
+    ))
+  ];
 
   pythonImportsCheck = [ "vllm" ];
 
