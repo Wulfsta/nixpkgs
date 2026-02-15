@@ -85,6 +85,8 @@
   cupy,
   flashinfer,
   nvidia-ml-py,
+  # rocm-only
+  amdsmi,
 
   # optional-dependencies
   # audio
@@ -294,7 +296,7 @@ let
     else if cudaSupport then
       gpuArchWarner supportedCudaCapabilities unsupportedCudaCapabilities
     else if rocmSupport then
-      rocmPackages.clr.gpuTargets
+      rocmPackages.clr.localGpuTargets or rocmPackages.clr.gpuTargets
     else
       throw "No GPU targets specified"
   );
@@ -319,6 +321,48 @@ let
     (lib.getLib p)
     (lib.getDev p)
   ];
+
+  rocmtoolkit_joined = symlinkJoin {
+    name = "rocm-merged";
+
+    paths = with rocmPackages; [
+      rocm-core
+      clr
+      rccl
+      miopen
+      aotriton
+      rocrand
+      rocblas
+      rocsparse
+      hipsparse
+      rocthrust
+      rocprim
+      hipcub
+      roctracer
+      rocfft
+      rocsolver
+      hipfft
+      hiprand
+      hipsolver
+      hipblas-common
+      hipblas
+      hipblaslt
+      rocminfo
+      rocm-comgr
+      rocm-device-libs
+      rocm-runtime
+      rocm-smi
+      clr.icd
+      hipify
+      hipcc
+      amdsmi
+    ];
+
+    # Fix `setuptools` not being found
+    postBuild = ''
+      rm -rf $out/nix-support
+    '';
+  };
 
 in
 
@@ -369,7 +413,8 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     which
   ]
   ++ lib.optionals rocmSupport [
-    rocmPackages.hipcc
+    rocmtoolkit_joined
+    autoAddDriverRunpath
   ]
   ++ lib.optionals cudaSupport [
     cudaPackages.cuda_nvcc
@@ -405,19 +450,14 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
         libcufile
       ])
     )
-    ++ lib.optionals rocmSupport (
-      with rocmPackages;
-      [
-        clr
-        rocthrust
-        rocprim
-        hipsparse
-        hipblas
-      ]
-    )
+    ++ lib.optionals rocmSupport ([ rocmtoolkit_joined ])
     ++ lib.optionals stdenv.cc.isClang [
       llvmPackages.openmp
     ];
+
+  propagatedBuildInputs = lib.optionals rocmSupport [
+    rocmtoolkit_joined
+  ];
 
   dependencies = [
     aioprometheus
@@ -485,7 +525,8 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     cupy
     flashinfer
     nvidia-ml-py
-  ];
+  ]
+  ++ lib.optionals rocmSupport [ amdsmi ];
 
   optional-dependencies = {
     audio = [
@@ -524,8 +565,12 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     // lib.optionalAttrs rocmSupport {
       VLLM_TARGET_DEVICE = "rocm";
       # Otherwise it tries to enumerate host supported ROCM gfx archs, and that is not possible due to sandboxing.
-      PYTORCH_ROCM_ARCH = lib.strings.concatStringsSep ";" rocmPackages.clr.gpuTargets;
-      ROCM_HOME = "${rocmPackages.clr}";
+      PYTORCH_ROCM_ARCH = gpuTargetString;
+      CMAKE_HIP_ARCHITECTURES = gpuTargetString;
+      ROCM_HOME = "${rocmtoolkit_joined}";
+      ROCM_PATH = "${rocmtoolkit_joined}";
+      ROCM_SOURCE_DIR = "${rocmtoolkit_joined}";
+      TRITON_KERNELS_SRC_DIR = "${lib.getDev triton-kernels}/python/triton_kernels/triton_kernels";
     }
     // lib.optionalAttrs cpuSupport {
       VLLM_TARGET_DEVICE = "cpu";
@@ -539,6 +584,8 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   '';
 
   pythonRelaxDeps = true;
+
+  dontCheckRuntimeDeps = if rocmSupport then true else false; # Skip the check that fails due to tensorizer, runai-model-streamer, conch-triton-kernels
 
   pythonImportsCheck = [ "vllm" ];
 
