@@ -88,6 +88,7 @@
   cupy,
   flashinfer,
   nvidia-ml-py,
+  amdsmi,
 
   # optional-dependencies
   # audio
@@ -171,10 +172,10 @@ let
   # grep for DEFAULT_TRITON_KERNELS_TAG in the following file
   # https://github.com/vllm-project/vllm/blob/v${version}/cmake/external_projects/triton_kernels.cmake
   triton-kernels = fetchFromGitHub {
-    owner = "triton-lang";
-    repo = "triton";
-    tag = "v3.5.0";
-    hash = "sha256-F6T0n37Lbs+B7UHNYzoIQHjNNv3TcMtoXjNrT8ZUlxY=";
+    owner = "nlzy";
+    repo = "triton-gfx906";
+    rev = "7976d68f8ecae0102b9afc223b6bfd834d335b23";
+    hash = "sha256-jjiZ8eWY7EWCjI1viKDxBradtAoCr6M7giopqNUuHYM=";
   };
 
   # grep for GIT_TAG in the following file
@@ -297,7 +298,7 @@ let
     else if cudaSupport then
       gpuArchWarner supportedCudaCapabilities unsupportedCudaCapabilities
     else if rocmSupport then
-      rocmPackages.clr.gpuTargets
+      rocmPackages.clr.localGpuTargets or rocmPackages.clr.gpuTargets
     else
       throw "No GPU targets specified"
   );
@@ -524,6 +525,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     datasets
     peft
     timm
+    amdsmi
   ];
 
   optional-dependencies = {
@@ -567,7 +569,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     // lib.optionalAttrs rocmSupport {
       VLLM_TARGET_DEVICE = "rocm";
       # Otherwise it tries to enumerate host supported ROCM gfx archs, and that is not possible due to sandboxing.
-      PYTORCH_ROCM_ARCH = lib.strings.concatStringsSep ";" rocmPackages.clr.gpuTargets;
+      PYTORCH_ROCM_ARCH = gpuTargetString;
       # vLLM's CMake logic checks `ROCM_PATH` to decide whether HIP/ROCm is available.
       ROCM_PATH = "${rocmPackages.clr}";
       ROCM_HOME = "${rocmPackages.clr}";
@@ -587,10 +589,6 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   pythonRelaxDeps = true;
 
   makeWrapperArgs = lib.optionals rocmSupport [
-    "--prefix"
-    "PYTHONPATH"
-    ":"
-    "${rocmPackages.amdsmi}/share/amd_smi"
     "--prefix"
     "LD_LIBRARY_PATH"
     ":"
