@@ -95,8 +95,7 @@
   librosa,
   soundfile,
 
-  # internal dependency - for overriding in overlays
-  vllm-flash-attn ? null,
+  flash-attn,
 
   cudaSupport ? torch.cudaSupport,
   cudaPackages ? { },
@@ -188,51 +187,7 @@ let
     hash = "sha256-aG4qd0vlwP+8gudfvHwhtXCFmBOJKQQTvcwahpEqC84=";
   };
 
-  vllm-flash-attn' = lib.defaultTo (stdenv.mkDerivation {
-    pname = "vllm-flash-attn";
-    # https://github.com/vllm-project/flash-attention/blob/${src.rev}/vllm_flash_attn/__init__.py
-    version = "2.7.2.post1";
-
-    # grep for GIT_TAG in the following file
-    # https://github.com/vllm-project/vllm/blob/v${version}/cmake/external_projects/vllm_flash_attn.cmake
-    src = fetchFromGitHub {
-      name = "flash-attention-source";
-      owner = "vllm-project";
-      repo = "flash-attention";
-      rev = "188be16520ceefdc625fdf71365585d2ee348fe2";
-      hash = "sha256-Osec+/IF3+UDtbIhDMBXzUeWJ7hDJNb5FpaVaziPSgM=";
-    };
-
-    patches = [
-      # fix Hopper build failure
-      # https://github.com/Dao-AILab/flash-attention/pull/1719
-      # https://github.com/Dao-AILab/flash-attention/pull/1723
-      (fetchpatch {
-        url = "https://github.com/Dao-AILab/flash-attention/commit/dad67c88d4b6122c69d0bed1cebded0cded71cea.patch";
-        hash = "sha256-JSgXWItOp5KRpFbTQj/cZk+Tqez+4mEz5kmH5EUeQN4=";
-      })
-      (fetchpatch {
-        url = "https://github.com/Dao-AILab/flash-attention/commit/e26dd28e487117ee3e6bc4908682f41f31e6f83a.patch";
-        hash = "sha256-NkCEowXSi+tiWu74Qt+VPKKavx0H9JeteovSJKToK9A=";
-      })
-    ];
-
-    dontConfigure = true;
-
-    # vllm-flash-attn normally relies on `git submodule update` to fetch cutlass and composable_kernel
-    buildPhase = ''
-      rm -rf csrc/cutlass
-      ln -sf ${cutlass} csrc/cutlass
-    ''
-    + lib.optionalString rocmSupport ''
-      rm -rf csrc/composable_kernel;
-      ln -sf ${rocmPackages.composable_kernel} csrc/composable_kernel
-    '';
-
-    installPhase = ''
-      cp -rva . $out
-    '';
-  }) vllm-flash-attn;
+  vllm-flash-attn' = flash-attn;
 
   cpuSupport = !cudaSupport && !rocmSupport;
 
@@ -558,6 +513,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   ++ lib.optionals rocmSupport [
     (lib.cmakeFeature "CMAKE_CXX_FLAGS" rocmExtraIncludeFlags)
     (lib.cmakeFeature "CMAKE_HIP_FLAGS" rocmExtraIncludeFlags)
+    (lib.cmakeFeature "VLLM_FLASH_ATTN_SRC_DIR" "${lib.getDev vllm-flash-attn'}")
   ];
 
   env =
