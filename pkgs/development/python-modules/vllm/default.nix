@@ -483,6 +483,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     peft
     timm
     amdsmi
+    vllm-flash-attn'
   ];
 
   optional-dependencies = {
