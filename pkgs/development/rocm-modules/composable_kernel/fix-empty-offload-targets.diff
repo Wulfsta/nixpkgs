@@ -1,0 +1,37 @@
+diff --git a/library/src/tensor_operation_instance/gpu/CMakeLists.txt b/library/src/tensor_operation_instance/gpu/CMakeLists.txt
+index 172f6681b8..a46a51cbd9 100644
+--- a/library/src/tensor_operation_instance/gpu/CMakeLists.txt
++++ b/library/src/tensor_operation_instance/gpu/CMakeLists.txt
+@@ -153,6 +153,9 @@ function(add_instance_library INSTANCE_NAME)
+             if(source_name MATCHES "gemm_wmma_universal" AND source_name MATCHES "f8")
+                 list(FILTER INST_TARGETS INCLUDE REGEX "gfx12")
+             endif()
++            if(NOT INST_TARGETS)
++                continue()
++            endif()
+             set(offload_targets)
+             foreach(target IN LISTS INST_TARGETS)
+                 string(APPEND offload_targets "--offload-arch=${target} ")
+@@ -160,6 +163,11 @@ function(add_instance_library INSTANCE_NAME)
+             set_source_files_properties(${source} PROPERTIES COMPILE_FLAGS ${offload_targets})
+             list(APPEND INST_OBJ ${source})
+         endforeach()
++        if(NOT INST_OBJ)
++            message(WARNING "Skipping instance library ${INSTANCE_NAME}: No sources for selected GPU targets")
++            set(result 1 PARENT_SCOPE)
++            return()
++        endif()
+         add_library(${INSTANCE_NAME} OBJECT ${INST_OBJ})
+ 
+         # Allow comparing floating points directly in order to check sentinel values
+@@ -330,7 +338,9 @@ FOREACH(subdir_path ${dir_list})
+         if((add_inst EQUAL 1))
+             get_filename_component(target_dir ${subdir_path} NAME)
+             add_subdirectory(${target_dir})
+-            if("${cmake_instance}" MATCHES "gemm")
++            if(NOT TARGET device_${target_dir}_instance)
++                message(DEBUG "skip_instance_directory ${subdir_path} (target not created)")
++            elseif("${cmake_instance}" MATCHES "gemm")
+                 list(APPEND CK_DEVICE_GEMM_INSTANCES $<TARGET_OBJECTS:device_${target_dir}_instance>)
+             elseif("${cmake_instance}" MATCHES "conv")
+                  list(APPEND CK_DEVICE_CONV_INSTANCES $<TARGET_OBJECTS:device_${target_dir}_instance>)

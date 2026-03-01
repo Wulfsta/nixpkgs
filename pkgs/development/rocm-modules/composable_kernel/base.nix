@@ -19,21 +19,27 @@
   # and building specific instances, as done with ck4inductor/torch
   miOpenReqLibsOnly ? true,
   withDeprecatedKernels ? false,
-  gpuTargets ? (
-    clr.localGpuTargets or [
-      "gfx900"
-      "gfx906"
-      "gfx908"
-      "gfx90a"
-      "gfx942"
-      "gfx950"
-      "gfx10-3-generic"
-      "gfx11-generic"
-      "gfx12-generic"
-    ]
-  ),
+  gpuTargets ? null,
 }:
 
+let
+  defaultGpuTargets = [
+    "gfx900"
+    "gfx906"
+    "gfx908"
+    "gfx90a"
+    "gfx942"
+    "gfx950"
+    "gfx10-3-generic"
+    "gfx11-generic"
+    "gfx12-generic"
+  ];
+  effectiveGpuTargets =
+    if gpuTargets != null && gpuTargets != [ ] then
+      gpuTargets
+    else
+      clr.localGpuTargets or defaultGpuTargets;
+in
 stdenv.mkDerivation (finalAttrs: {
   preBuild = ''
     echo "This derivation isn't intended to be built directly and only exists to be overridden and built in chunks";
@@ -112,18 +118,24 @@ stdenv.mkDerivation (finalAttrs: {
     # and produces unusably slow kernels that are huge
     "-DCK_USE_FP8_ON_UNSUPPORTED_ARCH=OFF"
   ]
-  ++ lib.optionals (gpuTargets != [ ]) [
+  ++ lib.optionals (effectiveGpuTargets != [ ]) [
     # We intentionally set GPU_ARCHS and not AMD/GPU_TARGETS
     # per readme this is required if archs are dissimilar
     # In rocm-6.3.x not setting any arch flag worked
     # but setting dissimilar arches always failed
-    "-DGPU_ARCHS=${lib.concatStringsSep ";" gpuTargets}"
+    "-DGPU_ARCHS=${lib.concatStringsSep ";" effectiveGpuTargets}"
   ]
   ++ lib.optionals buildTests [
     "-DGOOGLETEST_DIR=${gtest.src}" # Custom linker names
   ];
 
-  # No flags to build selectively it seems...
+  patches = [
+    # Fix CMake error when all sources in an instance library are filtered out
+    # for the selected GPU target (e.g. gfx906-only builds where XDL sources
+    # have no valid targets)
+    ./fix-empty-offload-targets.diff
+  ];
+
   postPatch =
     # Reduce configure time by preventing thousands of clang-tidy targets being added
     # We will never call them
@@ -164,15 +176,17 @@ stdenv.mkDerivation (finalAttrs: {
     '';
 
   passthru = {
-    inherit gpuTargets miOpenReqLibsOnly;
+    gpuTargets = effectiveGpuTargets;
+    customGpuTargets = gpuTargets != null || clr ? localGpuTargets;
+    inherit miOpenReqLibsOnly;
     updateScript = rocmUpdateScript {
       name = finalAttrs.pname;
       inherit (finalAttrs.src) owner;
       inherit (finalAttrs.src) repo;
     };
-    anyGfx9Target = lib.lists.any (lib.strings.hasPrefix "gfx9") gpuTargets;
+    anyGfx9Target = lib.lists.any (lib.strings.hasPrefix "gfx9") effectiveGpuTargets;
     anyMfmaTarget =
-      (lib.lists.intersectLists gpuTargets [
+      (lib.lists.intersectLists effectiveGpuTargets [
         "gfx908"
         "gfx90a"
         "gfx942"

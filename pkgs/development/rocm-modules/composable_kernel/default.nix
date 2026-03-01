@@ -5,7 +5,7 @@
 }:
 
 let
-  inherit (composable_kernel_base) miOpenReqLibsOnly;
+  inherit (composable_kernel_base) miOpenReqLibsOnly customGpuTargets;
   parts = {
     _mha = {
       enabled = !miOpenReqLibsOnly;
@@ -241,10 +241,35 @@ let
         makeTargets = targets;
         preBuild = ''
           echo "Building ${part}"
-          makeFlagsArray+=($makeTargets)
           substituteInPlace $(find ./ -name "Makefile" -type f) \
             --replace-fail '.NOTPARALLEL:' '.UNUSED_NOTPARALLEL:'
-        '';
+        ''
+        + (
+          if customGpuTargets then
+            ''
+              # JANK: make -n has exit code 0 due to how cmake builds the makefiles
+              # so parse make help output to filter targets for custom GPU builds
+              mapfile -t available_targets < <(make help 2>/dev/null | awk '/^\.\.\./ {print $2}')
+              declare -A target_set
+              for t in "''${available_targets[@]}"; do target_set["$t"]=1; done
+              for target in $makeTargets; do
+                if [[ -n "''${target_set[$target]+x}" ]]; then
+                  makeFlagsArray+=("$target")
+                else
+                  echo "Skipping target $target (not generated for selected GPU targets)"
+                fi
+              done
+              if [[ ''${#makeFlagsArray[@]} -eq 0 ]]; then
+                echo "No targets to build for ${part}, skipping"
+                mkdir -p "$out"
+                exit 0
+              fi
+            ''
+          else
+            ''
+              makeFlagsArray+=($makeTargets)
+            ''
+        );
 
         # Compile parallelism adjusted based on available RAM
         # Never uses less than NIX_BUILD_CORES/4, never uses more than NIX_BUILD_CORES
