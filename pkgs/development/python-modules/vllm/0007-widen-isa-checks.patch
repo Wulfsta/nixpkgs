@@ -1,19 +1,53 @@
+diff --git a/csrc/rocm/skinny_gemms.cu b/csrc/rocm/skinny_gemms.cu
+index a6cf63f..3ae2583 100644
+--- a/csrc/rocm/skinny_gemms.cu
++++ b/csrc/rocm/skinny_gemms.cu
+@@ -21,7 +21,8 @@
+ // However, it may be possible to fix these kernels to handle both issues.
+
+ #if defined(__HIPCC__) && \
+-    (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__))
++    (defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || \
++     defined(__gfx942__) || defined(__gfx950__))
+   #define __HIP__GFX9__
+ #endif
+
+@@ -285,9 +286,19 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
+   return out_c;
+ }
+
++// gfx906 has v_dot2_f32_f16 (VOP3P, 3-src: dst = dot2(s0,s1) + s2)
++// gfx908+ has v_dot2c_f32_f16 (VOP2, compact: dst += dot2(s0,s1))
++#if defined(__gfx906__)
++#define DOT2C_F16_ASM(V0, V2, V3) \
++    asm("v_dot2_f32_f16 %0, %2, %3, %1" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3));
++#else
++#define DOT2C_F16_ASM(V0, V2, V3) \
++    asm("v_dot2c_f32_f16 %0, %2, %3" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3));
++#endif
++
+ #define DOT2C(V0, V2, V3)                                                     \
+   if constexpr (std::is_same_v<scalar_t, half>) {                             \
+-    asm("v_dot2c_f32_f16 %0, %2, %3" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3)); \
++    DOT2C_F16_ASM(V0, V2, V3)                                                \
+   } else if constexpr (std::is_same_v<scalar_t, __hip_bfloat16>) {            \
+     float2 s = __bfloat1622float2(*((__hip_bfloat162*)(&(V2)))) *             \
+                __bfloat1622float2(*((__hip_bfloat162*)(&(V3))));              \
 diff --git a/vllm/platforms/rocm.py b/vllm/platforms/rocm.py
-index 6e67456bf..7735a0fd5 100644
+index 6e67456..321386b 100644
 --- a/vllm/platforms/rocm.py
 +++ b/vllm/platforms/rocm.py
-@@ -102,7 +102,9 @@ def on_mi3xx() -> bool:
+@@ -102,7 +102,8 @@ def on_mi3xx() -> bool:
  @cache
  def on_gfx9() -> bool:
      GPU_ARCH = torch.cuda.get_device_properties("cuda").gcnArchName
 -    return any(arch in GPU_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
-+    return any(arch in GPU_ARCH
-+               for arch in ["gfx906", "gfx908", "gfx90a",
-+                            "gfx942", "gfx950"])
++    return any(arch in GPU_ARCH for arch in ["gfx906", "gfx908", "gfx90a",
++                                             "gfx942", "gfx950"])
 
 
  @cache
-@@ -165,7 +167,7 @@ def use_rocm_custom_paged_attention(
+@@ -165,7 +166,7 @@ def use_rocm_custom_paged_attention(
 
  @cache
  def flash_attn_triton_available() -> bool:
@@ -22,104 +56,44 @@ index 6e67456bf..7735a0fd5 100644
          return False
      try:
          from importlib.util import find_spec
-@@ -278,6 +280,10 @@ class RocmPlatform(Platform):
-             logger.info("Using FlexAttention backend.")
-             return AttentionBackendEnum.FLEX_ATTENTION.get_path()
+@@ -274,6 +275,10 @@ class RocmPlatform(Platform):
+                 f"is not MLA type while requested for MLA backend."
+             )
 
 +        if selected_backend == AttentionBackendEnum.FLASH_ATTN:
 +            logger.info("Using Flash Attention backend.")
 +            return AttentionBackendEnum.FLASH_ATTN.get_path()
 +
-         if selected_backend == AttentionBackendEnum.TRITON_ATTN:
-             logger.info("Using Triton Attention backend.")
-             return AttentionBackendEnum.TRITON_ATTN.get_path()
-@@ -334,6 +340,18 @@ class RocmPlatform(Platform):
-                 logger.info("Using Aiter Flash Attention backend.")
-                 return AttentionBackendEnum.ROCM_AITER_FA.get_path()
-
-+            # Priority 5; Use Flash Attention Triton backend
-+            if (
-+                (on_gfx1x() or on_gfx9())
-+                and flash_attn_triton_available()
-+                and (attn_selector_config.dtype == torch.float16
-+                    or attn_selector_config.dtype == torch.bfloat16)
-+            ):
-+                logger.info_once(
-+                    "Using Flash Attention (Triton backend)."
-+                )
-+                return AttentionBackendEnum.FLASH_ATTN
-+
-             # Default: Triton Unified Attention
-             logger.info("Using Triton Attention backend.")
-             return AttentionBackendEnum.TRITON_ATTN.get_path()
-@@ -384,7 +402,7 @@ class RocmPlatform(Platform):
-
-         # RDNA3/RDNA4 (gfx11xx/gfx12xx): Use Flash Attention Triton backend
-         if (
--            on_gfx1x()
-+            (on_gfx1x() or on_gfx9())
-             and flash_attn_triton_available()
-             and (dtype == torch.float16 or dtype == torch.bfloat16)
-         ):
+         if selected_backend == AttentionBackendEnum.FLEX_ATTENTION:
+             logger.info("Using FlexAttention backend.")
+             return AttentionBackendEnum.FLEX_ATTENTION.get_path()
 diff --git a/vllm/v1/attention/backends/fa_utils.py b/vllm/v1/attention/backends/fa_utils.py
-index 988cf7c27..d60ddb0f9 100644
+index 988cf7c..6ee7c14 100644
 --- a/vllm/v1/attention/backends/fa_utils.py
 +++ b/vllm/v1/attention/backends/fa_utils.py
-@@ -33,6 +33,40 @@ elif current_platform.is_rocm():
+@@ -23,6 +23,8 @@ elif current_platform.is_xpu():
+     get_scheduler_metadata = ipex_ops.get_scheduler_metadata  # type: ignore[assignment]
+
+ elif current_platform.is_rocm():
++    from vllm._custom_ops import reshape_and_cache_flash  # type: ignore[no-redef]
++
+     try:
+         from flash_attn import flash_attn_varlen_func  # type: ignore[no-redef]
+     except ImportError:
+@@ -33,6 +35,9 @@ elif current_platform.is_rocm():
                  "to be installed. Please install flash-attn first."
              )
 
-+    @staticmethod
-+    def get_scheduler_metadata(
-+        batch_size,
-+        max_seqlen_q,
-+        max_seqlen_k,
-+        num_heads_q,
-+        num_heads_kv,
-+        headdim,
-+        cache_seqlens,
-+        qkv_dtype,
-+        headdim_v=None,
-+        cu_seqlens_q=None,
-+        cu_seqlens_k_new=None,
-+        cache_leftpad=None,
-+        page_size=None,
-+        max_seqlen_k_new=0,
-+        causal=False,
-+        window_size=(-1, -1),  # -1 means infinite context window
-+        has_softcap=False,
-+        num_splits=0,  # Can be tuned for speed
-+        pack_gqa=None,  # Can be tuned for speed
-+        sm_margin=0,  # Can be tuned if some SMs are used for communication
-+    ) -> None:
-+        logger.warning_once(
-+            "get_scheduler_metadata is not implemented for ROCm, returning None."
-+        )
-+        return None
++    def get_scheduler_metadata(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef,misc]
++        raise NotImplementedError("get_scheduler_metadata is not supported on ROCm")
 +
-+    from vllm.v1.attention.ops.triton_reshape_and_cache_flash import (
-+        triton_reshape_and_cache_flash,
-+    )
-+
-+    reshape_and_cache_flash = triton_reshape_and_cache_flash # type: ignore[assignment]
-+    get_scheduler_metadata = get_scheduler_metadata  # type: ignore[assignment]
 
  def get_flash_attn_version(requires_alibi: bool = False) -> int | None:
      # import here to avoid circular dependencies
-@@ -41,8 +75,8 @@ def get_flash_attn_version(requires_alibi: bool = False) -> int | None:
-     if current_platform.is_xpu():
-         return 2
-     if current_platform.is_rocm():
--        # ROCm doesn't use vllm_flash_attn; return None to skip fa_version arg
--        return None
-+        # Hardcode to 2 for this patch
-+        return 2
-     try:
-         from vllm.vllm_flash_attn.flash_attn_interface import (
-             fa_version_unsupported_reason,
-@@ -127,4 +161,4 @@ def flash_attn_supports_mla():
+@@ -127,4 +132,5 @@ def flash_attn_supports_mla():
 
 
  def is_flash_attn_varlen_func_available() -> bool:
 -    return current_platform.is_cuda() or current_platform.is_xpu()
-+    return True
++    return (current_platform.is_cuda() or current_platform.is_xpu()
++            or current_platform.is_rocm())
