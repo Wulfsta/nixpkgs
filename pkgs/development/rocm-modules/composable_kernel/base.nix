@@ -5,7 +5,6 @@
   rocmUpdateScript,
   cmake,
   rocm-cmake,
-  llvm,
   clr,
   rocminfo,
   python3,
