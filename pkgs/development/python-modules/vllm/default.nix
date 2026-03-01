@@ -471,6 +471,8 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     datasets
     peft
     timm
+    amdsmi
+    vllm-flash-attn'
   ];
 
   optional-dependencies = {
