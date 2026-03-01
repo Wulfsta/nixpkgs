@@ -316,6 +316,8 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     ./0003-propagate-pythonpath.patch
     ./0005-drop-intel-reqs.patch
     ./0006-drop-rocm-extra-reqs.patch
+    # https://gist.github.com/LunNova/f968233ae3a73916b488304a74c20722
+    ./0007-widen-isa-checks.patch
   ];
 
   postPatch = ''
