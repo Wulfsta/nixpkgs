@@ -31,7 +31,6 @@ buildPythonPackage rec {
   '';
 
   env = {
-    FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE";
     FLASH_ATTENTION_TRITON_AMD_ENABLE = "TRUE";
     ROCM_PATH = "${rocmPackages.clr}";
     ROCM_HOME = "${rocmPackages.clr}";
