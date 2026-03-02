@@ -44,15 +44,15 @@
 
 buildPythonPackage (finalAttrs: {
   pname = "triton";
-  version = "3.5.0";
+  version = "3.6.0";
   pyproject = true;
 
   # Remember to bump triton-llvm as well!
   src = fetchFromGitHub {
-    owner = "nlzy";
-    repo = "triton-gfx906";
-    rev = "7976d68f8ecae0102b9afc223b6bfd834d335b23";
-    hash = "sha256-jjiZ8eWY7EWCjI1viKDxBradtAoCr6M7giopqNUuHYM=";
+    owner = "Wulfsta";
+    repo = "triton";
+    rev = "0ae3b7ae1f765084da141ebf6d7dc494c2672a53";
+    hash = "sha256-JYmikeip3scoi6yfUMh7PFDBS68ZwuqcwLbPyeyUnO4=";
   };
 
   patches = [

@@ -171,10 +171,10 @@ let
   # grep for DEFAULT_TRITON_KERNELS_TAG in the following file
   # https://github.com/vllm-project/vllm/blob/v${version}/cmake/external_projects/triton_kernels.cmake
   triton-kernels = fetchFromGitHub {
-    owner = "nlzy";
-    repo = "triton-gfx906";
-    rev = "7976d68f8ecae0102b9afc223b6bfd834d335b23";
-    hash = "sha256-jjiZ8eWY7EWCjI1viKDxBradtAoCr6M7giopqNUuHYM=";
+    owner = "Wulfsta";
+    repo = "triton";
+    rev = "0ae3b7ae1f765084da141ebf6d7dc494c2672a53";
+    hash = "sha256-JYmikeip3scoi6yfUMh7PFDBS68ZwuqcwLbPyeyUnO4=";
   };
 
   # grep for GIT_TAG in the following file
@@ -290,14 +290,14 @@ in
 
 buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   pname = "vllm";
-  version = "0.15.1";
+  version = "0.16.0";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "vllm-project";
     repo = "vllm";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-qsAvcOB8ugGlBqBrLfNHqaIUcxLwaXBTg8xWRnGyd94=";
+    rev = "89a77b10846fd96273cce78d86d2556ea582d26e";
+    hash = "sha256-7E67xVRlKmm+Hbp5nphhwH8SQC9LpCFNBfF2ZAOt79k=";
   };
 
   patches = [
@@ -503,8 +503,6 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     (lib.cmakeFeature "CUTLASS_ENABLE_CUBLAS" "ON")
   ]
   ++ lib.optionals rocmSupport [
-    (lib.cmakeFeature "CMAKE_CXX_FLAGS" rocmExtraIncludeFlags)
-    (lib.cmakeFeature "CMAKE_HIP_FLAGS" rocmExtraIncludeFlags)
     (lib.cmakeFeature "VLLM_FLASH_ATTN_SRC_DIR" "${lib.getDev vllm-flash-attn'}")
   ];
 
