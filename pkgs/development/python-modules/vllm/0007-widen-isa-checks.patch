@@ -1,5 +1,5 @@
 diff --git a/csrc/rocm/skinny_gemms.cu b/csrc/rocm/skinny_gemms.cu
-index a6cf63f22..3ae258344 100644
+index 19bb324bd..f77c85374 100644
 --- a/csrc/rocm/skinny_gemms.cu
 +++ b/csrc/rocm/skinny_gemms.cu
 @@ -21,7 +21,8 @@
@@ -34,20 +34,19 @@ index a6cf63f22..3ae258344 100644
      float2 s = __bfloat1622float2(*((__hip_bfloat162*)(&(V2)))) *             \
                 __bfloat1622float2(*((__hip_bfloat162*)(&(V3))));              \
 diff --git a/vllm/platforms/rocm.py b/vllm/platforms/rocm.py
-index 6e67456bf..d3e58973a 100644
+index ab4c3e074..58e9287f7 100644
 --- a/vllm/platforms/rocm.py
 +++ b/vllm/platforms/rocm.py
-@@ -102,7 +102,8 @@ def on_mi3xx() -> bool:
- @cache
- def on_gfx9() -> bool:
-     GPU_ARCH = torch.cuda.get_device_properties("cuda").gcnArchName
--    return any(arch in GPU_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
-+    return any(arch in GPU_ARCH for arch in ["gfx906", "gfx908", "gfx90a",
-+                                             "gfx942", "gfx950"])
+@@ -146,7 +146,7 @@ _GCN_ARCH = _get_gcn_arch()
 
+ _ON_GFX1X = any(arch in _GCN_ARCH for arch in ["gfx11", "gfx12"])
+ _ON_MI3XX = any(arch in _GCN_ARCH for arch in ["gfx942", "gfx950"])
+-_ON_GFX9 = any(arch in _GCN_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
++_ON_GFX9 = any(arch in _GCN_ARCH for arch in ["gfx906", "gfx90a", "gfx942", "gfx950"])
+ _ON_GFX942 = "gfx942" in _GCN_ARCH
+ _ON_GFX950 = "gfx950" in _GCN_ARCH
 
- @cache
-@@ -165,7 +166,7 @@ def use_rocm_custom_paged_attention(
+@@ -286,7 +286,7 @@ def use_rocm_custom_paged_attention(
 
  @cache
  def flash_attn_triton_available() -> bool:
@@ -56,7 +55,7 @@ index 6e67456bf..d3e58973a 100644
          return False
      try:
          from importlib.util import find_spec
-@@ -384,7 +385,7 @@ class RocmPlatform(Platform):
+@@ -510,7 +510,7 @@ class RocmPlatform(Platform):
 
          # RDNA3/RDNA4 (gfx11xx/gfx12xx): Use Flash Attention Triton backend
          if (

@@ -301,14 +301,14 @@ in
 
 buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   pname = "vllm";
-  version = "0.15.1";
+  version = "0.17.0";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "vllm-project";
     repo = "vllm";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-qsAvcOB8ugGlBqBrLfNHqaIUcxLwaXBTg8xWRnGyd94=";
+    rev = "53700bf49b578b7114c9049d41d01aea93869535";
+    hash = "sha256-sMy6KTGMz18ARThRzeM/4UZv7MDJYtsJm9bzIh1BGLo=";
   };
 
   patches = [
