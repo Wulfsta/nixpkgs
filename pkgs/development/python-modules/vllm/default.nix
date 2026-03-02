@@ -548,6 +548,9 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
   pythonRelaxDeps = true;
 
   makeWrapperArgs = lib.optionals rocmSupport [
+    "--set"
+    "FLASH_ATTENTION_TRITON_AMD_ENABLE"
+    "TRUE"
     "--prefix"
     "LD_LIBRARY_PATH"
     ":"
