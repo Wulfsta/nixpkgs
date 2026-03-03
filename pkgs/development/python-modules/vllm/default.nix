@@ -172,10 +172,10 @@ let
   # grep for DEFAULT_TRITON_KERNELS_TAG in the following file
   # https://github.com/vllm-project/vllm/blob/v${version}/cmake/external_projects/triton_kernels.cmake
   triton-kernels = fetchFromGitHub {
-    owner = "triton-lang";
-    repo = "triton";
-    tag = "v3.5.0";
-    hash = "sha256-F6T0n37Lbs+B7UHNYzoIQHjNNv3TcMtoXjNrT8ZUlxY=";
+    owner = "nlzy";
+    repo = "triton-gfx906";
+    rev = "7976d68f8ecae0102b9afc223b6bfd834d335b23";
+    hash = "sha256-jjiZ8eWY7EWCjI1viKDxBradtAoCr6M7giopqNUuHYM=";
   };
 
   # grep for GIT_TAG in the following file
