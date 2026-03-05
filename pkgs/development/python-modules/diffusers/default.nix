@@ -15,6 +15,7 @@
   regex,
   requests,
   safetensors,
+  httpx,
 
   # optional dependencies
   accelerate,
@@ -66,6 +67,7 @@ buildPythonPackage rec {
     regex
     requests
     safetensors
+    httpx
   ];
 
   optional-dependencies = {

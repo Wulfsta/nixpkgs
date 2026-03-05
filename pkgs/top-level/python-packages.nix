@@ -7206,9 +7206,9 @@ self: super: with self; {
 
   huey = callPackage ../development/python-modules/huey { };
 
-  huggingface-hub = callPackage ../development/python-modules/huggingface-hub { };
-
   huggingface-hub_0 = callPackage ../development/python-modules/huggingface-hub/0.nix { };
+
+  huggingface-hub = huggingface-hub_0; #callPackage ../development/python-modules/huggingface-hub { };
 
   human-readable = callPackage ../development/python-modules/human-readable { };
 
@@ -19433,11 +19433,11 @@ self: super: with self; {
 
   transaction = callPackage ../development/python-modules/transaction { };
 
-  transformers = callPackage ../development/python-modules/transformers { };
-
   transformers_4 = callPackage ../development/python-modules/transformers/4.nix {
     huggingface-hub = huggingface-hub_0;
   };
+
+  transformers = transformers_4; #callPackage ../development/python-modules/transformers { };
 
   transforms3d = callPackage ../development/python-modules/transforms3d { };
 
