@@ -78,7 +78,7 @@
   torch,
   torchaudio,
   torchvision,
-  transformers,
+  transformers_4,
   uvicorn,
   xformers,
   xgrammar,
@@ -173,8 +173,8 @@ let
   triton-kernels = fetchFromGitHub {
     owner = "Wulfsta";
     repo = "triton";
-    rev = "0ae3b7ae1f765084da141ebf6d7dc494c2672a53";
-    hash = "sha256-JYmikeip3scoi6yfUMh7PFDBS68ZwuqcwLbPyeyUnO4=";
+    rev = "8f8b24fc9cdc990bcfdaa4cc8cb0574c6eef9c66";
+    hash = "sha256-K95JHgzUcKvZteeCCNfF6neZEZ0e+zHKGcI+Nit2trQ=";
   };
 
   # grep for GIT_TAG in the following file
@@ -449,7 +449,7 @@ buildPythonPackage.override { stdenv = torch.stdenv; } (finalAttrs: {
     torch.stdenv.cc
     torchaudio
     torchvision
-    transformers
+    transformers_4
     uvicorn
     xformers
     xgrammar

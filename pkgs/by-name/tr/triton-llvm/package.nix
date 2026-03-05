@@ -84,8 +84,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "llvm";
     repo = "llvm-project";
-    rev = "979132a02d146ec79e2f046e31877516d7f32d20";
-    hash = "sha256-bHcgsEgY3K+HcAf81DHiLKLTs2nbnYaF9ouz0ZrhzbI=";
+    rev = "f6ded0be897e2878612dd903f7e8bb85448269e5";
+    hash = "sha256-T76zHZZ2bp3Ye9GTV+MgbKqMbtmMGElMFsWuCkiWqrM=";
   };
 
   nativeBuildInputs = [
