@@ -51,8 +51,8 @@ buildPythonPackage (finalAttrs: {
   src = fetchFromGitHub {
     owner = "Wulfsta";
     repo = "triton";
-    rev = "8f8b24fc9cdc990bcfdaa4cc8cb0574c6eef9c66";
-    hash = "sha256-K95JHgzUcKvZteeCCNfF6neZEZ0e+zHKGcI+Nit2trQ=";
+    rev = "82deb76aa8978beeb16f8d52348bd44270764d16";
+    hash = "sha256-D4s09+z7PkQSCK2juTo6Y6H/DCCjOd5KFPN6awK9QPs=";
   };
 
   patches = [
