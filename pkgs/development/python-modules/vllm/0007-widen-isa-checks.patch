@@ -1,0 +1,75 @@
+diff --git a/csrc/rocm/skinny_gemms.cu b/csrc/rocm/skinny_gemms.cu
+index ecd94cacc..d041bdaef 100644
+--- a/csrc/rocm/skinny_gemms.cu
++++ b/csrc/rocm/skinny_gemms.cu
+@@ -21,7 +21,8 @@
+ // However, it may be possible to fix these kernels to handle both issues.
+
+ #if defined(__HIPCC__) && \
+-    (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__))
++    (defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || \
++     defined(__gfx942__) || defined(__gfx950__))
+   #define __HIP__GFX9__
+ #endif
+
+@@ -285,9 +286,19 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
+   return out_c;
+ }
+
++// gfx906 has v_dot2_f32_f16 (VOP3P, 3-src: dst = dot2(s0,s1) + s2)
++// gfx908+ has v_dot2c_f32_f16 (VOP2, compact: dst += dot2(s0,s1))
++#if defined(__gfx906__)
++#define DOT2C_F16_ASM(V0, V2, V3) \
++    asm("v_dot2_f32_f16 %0, %2, %3, %1" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3));
++#else
++#define DOT2C_F16_ASM(V0, V2, V3) \
++    asm("v_dot2c_f32_f16 %0, %2, %3" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3));
++#endif
++
+ #define DOT2C(V0, V2, V3)                                                     \
+   if constexpr (std::is_same_v<scalar_t, half>) {                             \
+-    asm("v_dot2c_f32_f16 %0, %2, %3" : "=v"(V0) : "0"(V0), "v"(V2), "v"(V3)); \
++    DOT2C_F16_ASM(V0, V2, V3)                                                \
+   } else if constexpr (std::is_same_v<scalar_t, __hip_bfloat16>) {            \
+     float2 s = __bfloat1622float2(*((__hip_bfloat162*)(&(V2)))) *             \
+                __bfloat1622float2(*((__hip_bfloat162*)(&(V3))));              \
+diff --git a/vllm/platforms/rocm.py b/vllm/platforms/rocm.py
+index 2545e4620..75f588c63 100644
+--- a/vllm/platforms/rocm.py
++++ b/vllm/platforms/rocm.py
+@@ -136,7 +136,7 @@ def on_mi3xx() -> bool:
+ @cache
+ def on_gfx9() -> bool:
+     GPU_ARCH = _get_gcn_arch_via_amdsmi()
+-    return any(arch in GPU_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
++    return any(arch in GPU_ARCH for arch in ["gfx906", "gfx90a", "gfx942", "gfx950"])
+
+
+ @cache
+@@ -164,7 +164,7 @@ def use_rocm_custom_paged_attention(
+     sinks: torch.Tensor | None = None,
+ ) -> bool:
+     GPU_ARCH = _get_gcn_arch_via_amdsmi()
+-    ON_GFX9 = any(arch in GPU_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
++    ON_GFX9 = any(arch in GPU_ARCH for arch in ["gfx906", "gfx90a", "gfx942", "gfx950"])
+     ON_GFX11_GFX12 = any(arch in GPU_ARCH for arch in ["gfx11", "gfx12"])
+
+     # custom paged attn always supported on V0. On V1, requires sliding window
+@@ -199,7 +199,7 @@ def use_rocm_custom_paged_attention(
+
+ @cache
+ def flash_attn_triton_available() -> bool:
+-    if not on_gfx1x():
++    if not (on_gfx1x() or on_gfx9()):
+         return False
+     try:
+         from importlib.util import find_spec
+@@ -423,7 +423,7 @@ class RocmPlatform(Platform):
+
+         # RDNA3/RDNA4 (gfx11xx/gfx12xx): Use Flash Attention Triton backend
+         if (
+-            on_gfx1x()
++            (on_gfx1x() or on_gfx9())
+             and flash_attn_triton_available()
+             and (dtype == torch.float16 or dtype == torch.bfloat16)
+         ):
